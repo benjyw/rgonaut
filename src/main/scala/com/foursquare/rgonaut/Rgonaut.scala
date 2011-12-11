@@ -1,74 +1,87 @@
 package com.foursquare.rgonaut
 
+import net.liftweb.json.compact
 import net.liftweb.json.JsonAST._
-import java.io.{StringWriter, Writer}
+import java.io.StringWriter
 import org.codehaus.jackson.{JsonFactory, JsonGenerator}
 
 
-
 class JsonASTBuilder {
-  def JsonObject = new RgonautObjectToJsonAST(Vector.empty)
-  def JsonArray = new RgonautArrayToJsonAST(Vector.empty)
+  def JsonObject = new ObjectToAST(Vector.empty)
+  def JsonArray = new ArrayToAST(Vector.empty)
 }
 
 class JsonGeneratorBuilder(g: JsonGenerator) {
-  def JsonObject = new RgonautObjectToGenerator(g)
-  def JsonArray = new RgonautArrayToGenerator(g)
+  def JsonObject = new ObjectToGenerator(g)
+  def JsonArray = new ArrayToGenerator(g)
 }
 
-class RgonautObjectToJsonAST(fields: Vector[JField]) {
-  def int(name: String, value: Long): RgonautObjectToJsonAST = addToAST(name, JInt(BigInt(value)))
-  def double(name: String, value: Double): RgonautObjectToJsonAST = addToAST(name, JDouble(value))
-  def boolean(name: String, value: Boolean): RgonautObjectToJsonAST = addToAST(name, JBool(value))
-  def string(name: String, value: String): RgonautObjectToJsonAST = addToAST(name, JString(value))
-  def json(name: String, value: RgonautObjectToJsonAST): RgonautObjectToJsonAST = addToAST(name, value.build)
-  def array(name: String, value: RgonautArrayToJsonAST): RgonautObjectToJsonAST = addToAST(name, value.build)
+
+class ObjectToAST(fields: Vector[JField]) {
+  def int(name: String, value: Long): ObjectToAST = addToAST(name, JInt(BigInt(value)))
+  def double(name: String, value: Double): ObjectToAST = addToAST(name, JDouble(value))
+  def boolean(name: String, value: Boolean): ObjectToAST = addToAST(name, JBool(value))
+  def string(name: String, value: String): ObjectToAST = addToAST(name, JString(value))
+  def json(name: String, value: ObjectToAST): ObjectToAST = addToAST(name, value.build)
+  def array(name: String, value: ArrayToAST): ObjectToAST = addToAST(name, value.build)
 
   def finish(): JObject = build
 
-  private def addToAST(name: String, value: JValue): RgonautObjectToJsonAST = new RgonautObjectToJsonAST(fields :+ JField(name, value))
-
+  private def addToAST(name: String, value: JValue): ObjectToAST = new ObjectToAST(fields :+ JField(name, value))
   private[rgonaut] def build = new JObject(fields.toList)
 }
 
-class RgonautArrayToJsonAST(values: Vector[JValue]) {
-  def int(value: Long): RgonautArrayToJsonAST = addToAST(JInt(BigInt(value)))
-  def double(value: Double): RgonautArrayToJsonAST = addToAST(JDouble(value))
-  def boolean(value: Boolean): RgonautArrayToJsonAST = addToAST(JBool(value))
-  def string(value: String): RgonautArrayToJsonAST = addToAST(JString(value))
-  def json(value: RgonautObjectToJsonAST): RgonautArrayToJsonAST = addToAST(value.build)
-  def array(value: RgonautArrayToJsonAST): RgonautArrayToJsonAST = addToAST(value.build)
+class ArrayToAST(values: Vector[JValue]) {
+  def int(value: Long): ArrayToAST = addToAST(JInt(BigInt(value)))
+  def double(value: Double): ArrayToAST = addToAST(JDouble(value))
+  def boolean(value: Boolean): ArrayToAST = addToAST(JBool(value))
+  def string(value: String): ArrayToAST = addToAST(JString(value))
+  def json(value: ObjectToAST): ArrayToAST = addToAST(value.build)
+  def array(value: ArrayToAST): ArrayToAST = addToAST(value.build)
 
   def finish(): JArray = build
 
-  private def addToAST(value: JValue): RgonautArrayToJsonAST = new RgonautArrayToJsonAST(values :+ value)
+  private def addToAST(value: JValue): ArrayToAST = new ArrayToAST(values :+ value)
   private[rgonaut] def build = new JArray(values.toList)
 }
 
-class RgonautObjectToGenerator(g: JsonGenerator) {
+
+
+class ObjectToGenerator(g: JsonGenerator) {
   g.writeStartObject();
 
-  def int(name: String, value: Long): RgonautObjectToGenerator = { g.writeNumberField(name, value); this }
-  def double(name: String, value: Double): RgonautObjectToGenerator = { g.writeNumberField(name, value); this }
-  def boolean(name: String, value: Boolean): RgonautObjectToGenerator = { g.writeBooleanField(name, value); this }
-  def string(name: String, value: String): RgonautObjectToGenerator = { g.writeStringField(name, value); this }
-  def json(name: String, value: RgonautObjectToGenerator): RgonautObjectToGenerator = { g.writeEndObject(); this }
-  def array(name: String, value: RgonautArrayToGenerator): RgonautObjectToGenerator = { g.writeEndArray(); this }
+  def int(name: String, value: Long): ObjectToGenerator = { g.writeNumberField(name, value); this }
+  def double(name: String, value: Double): ObjectToGenerator = { g.writeNumberField(name, value); this }
+  def boolean(name: String, value: Boolean): ObjectToGenerator = { g.writeBooleanField(name, value); this }
+  def string(name: String, value: String): ObjectToGenerator = { g.writeStringField(name, value); this }
+  def json(name: String, value: => ObjectToGenerator): ObjectToGenerator = {
+    g.writeFieldName(name)
+    value
+    g.writeEndObject();
+    this
+  }
+  def array(name: String, value: => ArrayToGenerator): ObjectToGenerator = {
+    g.writeFieldName(name)
+    value
+    g.writeEndArray();
+    this
+  }
 
-  def finish() { g.close() }
+  def finish() { g.writeEndObject(); g.close() }
 }
 
-class RgonautArrayToGenerator(g: JsonGenerator) {
+
+class ArrayToGenerator(g: JsonGenerator) {
   g.writeStartArray();
 
-  def int(value: Long): RgonautArrayToGenerator = { g.writeNumber(value); this }
-  def double(value: Double): RgonautArrayToGenerator = { g.writeNumber(value); this }
-  def boolean(value: Boolean): RgonautArrayToGenerator = { g.writeBoolean(value); this }
-  def string(value: String): RgonautArrayToGenerator = { g.writeString(value); this }
-  def json(value: RgonautObjectToGenerator): RgonautArrayToGenerator = { g.writeEndObject(); this }
-  def array(value: RgonautArrayToGenerator): RgonautArrayToGenerator = { g.writeEndArray(); this }
+  def int(value: Long): ArrayToGenerator = { g.writeNumber(value); this }
+  def double(value: Double): ArrayToGenerator = { g.writeNumber(value); this }
+  def boolean(value: Boolean): ArrayToGenerator = { g.writeBoolean(value); this }
+  def string(value: String): ArrayToGenerator = { g.writeString(value); this }
+  def json(value: ObjectToGenerator): ArrayToGenerator = { g.writeEndObject(); this }
+  def array(value: ArrayToGenerator): ArrayToGenerator = { g.writeEndArray(); this }
 
-  def finish() { g.close() }
+  def finish() { g.writeEndArray(); g.close() }
 }
 
 
@@ -76,7 +89,7 @@ object Example {
   def buildJsonAST() = {
     val b = new JsonASTBuilder()
 
-    val res: JObject =
+    val obj: JObject =
     (b.JsonObject
         .int("id", 1)
         .string("full_name", "Johnny Foursquare")
@@ -98,11 +111,18 @@ object Example {
           .int(4)
           .string("Foursquare"))
         .finish())
+
+    compact(render(obj)).trim()
   }
 
-  def generateJsonString() {
+  def generateJsonString() = {
     val out = new StringWriter()
-    val b = new JsonGeneratorBuilder(new JsonFactory().createJsonGenerator(out))
+    val factory = new JsonFactory()
+    // Make the generator strict, so we can verify that we close all objects/arrays properly.
+    factory.configure(JsonGenerator.Feature.AUTO_CLOSE_JSON_CONTENT, false)
+    // We call close on the target ourselves.
+    factory.configure(JsonGenerator.Feature.AUTO_CLOSE_TARGET, false)
+    val b = new JsonGeneratorBuilder(factory.createJsonGenerator(out))
 
     (b.JsonObject
         .int("id", 1)
@@ -125,12 +145,15 @@ object Example {
           .int(4)
           .string("Foursquare"))
         .finish())
-    println(out.toString)
+    out.toString.trim()
   }
 
   def main(args: Array[String]) {
-    generateJsonString()
+    val jsonStringFromAST = buildJsonAST()
+    val jsonStringFromGenerator = generateJsonString()
+    println(jsonStringFromAST)
+    println(jsonStringFromGenerator)
+    assert(jsonStringFromAST == jsonStringFromGenerator)
   }
 }
-
 
