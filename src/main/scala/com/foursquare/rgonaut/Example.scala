@@ -7,8 +7,7 @@ import net.liftweb.json.JsonAST.{JArray, JObject}
 
 
 object Example {
-
-def buildExampleJsonObject[JO <: JsonObject[JO, JA], JA <: JsonArray[JO, JA]](b: JsonBuilder[JO, JA]): JO = {
+  def buildExampleJsonObject[JO <: JsonObject[JO, JA], JA <: JsonArray[JO, JA]](b: JsonBuilder[JO, JA]): JO = {
     b.jsonObject
         .int("id", 1)
         .string("full_name", "Johnny Foursquare")
